@@ -6,12 +6,12 @@ from abc import ABC, abstractmethod
 
 class OrbitPropagator(ABC):
 
-    #generate satellite position at a given time
+    # Generate satellite position at a given time
     @abstractmethod
     def get_position(self, time_dt):
         pass
 
-    #get orbital period in minutes
+    # Get orbital period in minutes
     @abstractmethod
     def get_orbital_period(self):
         pass
@@ -68,7 +68,7 @@ class CircularOrbitPropagator(OrbitPropagator):
     def get_orbital_period(self):
         return self.orbital_period_minutes
 
-# using SGP4 algorithm from skyfield library to determine satelitte position from earth     
+# Using SGP4 algorithm from skyfield library to determine satelitte position from earth     
 class TLEOrbitPropagator(OrbitPropagator):
     def __init__(self, tle_line1, tle_line2, satellite_name="SAT"):
         """
@@ -124,7 +124,7 @@ class SolarPanelSimulator:
         self.sun = self.planets['sun']
     
     def get_sun_direction(self, time_dt):
-        # generate unit vector from Earth to Sun 
+        # Generate unit vector from Earth to Sun 
         t = self.ts.utc(time_dt.year, time_dt.month, time_dt.day, time_dt.hour, time_dt.minute, time_dt.second)
         
         sun_position = self.earth.at(t).observe(self.sun).position.km
