@@ -1,4 +1,4 @@
-from fastapi import APIRouter, HTTPException, Query, Depends
+from fastapi import APIRouter, HTTPException, Depends
 from fastapi.responses import FileResponse
 from app.schemas import SimulationRequest, SimulationResponse, SimulationDetailResponse
 from app.services.simulator import SimulationService

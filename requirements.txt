@@ -7,3 +7,4 @@ pydantic-settings==2.12.0
 python-multipart==0.0.20
 skyfield==1.53
 uvicorn==0.38.0
+SQLAlchemy==2.0.44
