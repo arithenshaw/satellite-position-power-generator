@@ -5,10 +5,12 @@ import pandas as pd
 import matplotlib
 matplotlib.use('Agg')
 import matplotlib.pyplot as plt
-
+from typing import Optional
 from app.schemas import SimulationRequest, SimulationResponse, SimulationStatistics, DataPoint
 from app.config import settings
-from app.services.orbit_propagator import CircularOrbitPropagator, TLEOrbitPropagator, SolarPanelSimulator
+from app.services.orbit_propagator import CircularOrbitPropagator, TLEOrbitPropagator, SolarPanelSimulator, OrbitPropagator
+from app.database import get_db, SessionLocal
+from app.models import Simulation
 
 class SimulationService:
     def __init__(self):
@@ -44,18 +46,27 @@ class SimulationService:
                 time_step_seconds=request.time_step_seconds
             )
             
-            statistics = self._calculate_statistics(results_df, propagator, request.time_step_seconds)
+            statistics = self.calculate_statistics(results_df, propagator, request.time_step_seconds)
             
             plot_url = None
             csv_url = None
             
             if request.generate_plot:
-                plot_url = self._generate_plot(sim_id, results_df, request.propagation_method)
+                plot_url = self.generate_plot(sim_id, results_df, request.propagation_method)
             
             if request.export_csv:
-                csv_url = self._export_csv(sim_id, results_df)
+                csv_url = self.export_csv(sim_id, results_df)
             
-            data_points = self._prepare_data_points(results_df, max_points=500)
+            data_points = self.prepare_data_points(results_df, max_points=500)
+
+            self.save_to_database(
+                sim_id=sim_id,
+                request=request,
+                statistics=statistics,
+                plot_url=plot_url,
+                csv_url=csv_url,
+                status="success"
+            )            
             
             return SimulationResponse(
                 simulation_id=sim_id,
@@ -69,6 +80,16 @@ class SimulationService:
             )
             
         except Exception as e:
+            self._save_to_database(
+                sim_id=sim_id,
+                request=request,
+                statistics=None,
+                plot_url=None,
+                csv_url=None,
+                status="error",
+                error_message=str(e)
+            )
+
             return SimulationResponse(
                 simulation_id=sim_id,
                 status="error",
@@ -76,7 +97,7 @@ class SimulationService:
                 created_at=datetime.utcnow().isoformat()
             )
     
-    def _calculate_statistics(self, df: pd.DataFrame, propagator, time_step_seconds: int) -> SimulationStatistics:
+    def calculate_statistics(self, df: pd.DataFrame, propagator: OrbitPropagator, time_step_seconds: int) -> SimulationStatistics:
         shadow_count = df['in_shadow'].sum()
         return SimulationStatistics(
             max_power_W=float(df['power_W'].max()),
@@ -89,7 +110,7 @@ class SimulationService:
             total_data_points=len(df)
         )
     
-    def _prepare_data_points(self, df: pd.DataFrame, max_points: int = 500) -> list[DataPoint]:
+    def prepare_data_points(self, df: pd.DataFrame, max_points: int = 500) -> list[DataPoint]:
         if len(df) > max_points:
             step = len(df) // max_points
             df = df.iloc[::step]
@@ -106,7 +127,7 @@ class SimulationService:
         
         return data_points
     
-    def _generate_plot(self, sim_id: str, df: pd.DataFrame, method: str) -> str:
+    def generate_plot(self, sim_id: str, df: pd.DataFrame, method: str) -> str:
         fig, axes = plt.subplots(2, 1, figsize=(12, 8))
         
         # Power plot
@@ -134,10 +155,71 @@ class SimulationService:
         
         return f"/outputs/{filename}"
     
-    def _export_csv(self, sim_id: str, df: pd.DataFrame) -> str:
+    def export_csv(self, sim_id: str, df: pd.DataFrame) -> str:
         """Export results to CSV"""
         filename = f"{sim_id}_data.csv"
         filepath = os.path.join(self.output_dir, filename)
         df.to_csv(filepath, index=False)
         return f"/outputs/{filename}"
-    
+
+    def _save_to_database(
+        self,
+        sim_id: str,
+        request: SimulationRequest,
+        statistics: Optional[SimulationStatistics],
+        plot_url: Optional[str],
+        csv_url: Optional[str],
+        status: str,
+        error_message: Optional[str] = None
+    ):
+        """Save simulation record to database"""
+        db = SessionLocal()
+        try:
+            stats_dict = {
+                'max_power_W': None,
+                'avg_power_W': None,
+                'min_altitude_km': None,
+                'max_altitude_km': None,
+                'eclipse_time_seconds': None,
+                'eclipse_percentage': None,
+                'orbital_period_minutes': None,
+                'total_data_points': None
+            }
+            if statistics:
+                stats_dict = {
+                    'max_power_W': statistics.max_power_W,
+                    'avg_power_W': statistics.avg_power_W,
+                    'min_altitude_km': statistics.min_altitude_km,
+                    'max_altitude_km': statistics.max_altitude_km,
+                    'eclipse_time_seconds': statistics.eclipse_time_seconds,
+                    'eclipse_percentage': statistics.eclipse_percentage,
+                    'orbital_period_minutes': statistics.orbital_period_minutes,
+                    'total_data_points': statistics.total_data_points
+                }
+            
+            sim_record = Simulation(
+                simulation_id=sim_id,
+                created_at=datetime.utcnow(),
+                propagation_method=request.propagation_method,
+                altitude_km=request.altitude_km,
+                inclination_deg=request.inclination_deg,
+                tle_line1=request.tle_line1,
+                tle_line2=request.tle_line2,
+                panel_area_m2=request.panel_area_m2,
+                panel_efficiency=request.panel_efficiency,
+                start_time=request.start_time,
+                duration_hours=request.duration_hours,
+                time_step_seconds=request.time_step_seconds,
+                **stats_dict,
+                plot_url=plot_url,
+                csv_url=csv_url,
+                status=status,
+                error_message=error_message
+            )
+            db.add(sim_record)
+            db.commit()
+        except Exception as e:
+            db.rollback()
+
+        finally:
+            db.close()    

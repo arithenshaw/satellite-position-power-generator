@@ -6,6 +6,7 @@ from datetime import datetime
 from app.routes import router
 from app.config import settings
 from app.schemas import HealthResponse
+from app.database import init_db
 
 app = FastAPI(
     title=settings.APP_NAME,
@@ -21,6 +22,8 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+init_db()
 
 # Create output directory
 os.makedirs(settings.OUTPUT_DIR, exist_ok=True)

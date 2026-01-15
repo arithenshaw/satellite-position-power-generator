@@ -5,9 +5,10 @@ class Settings(BaseSettings):
     VERSION: str = "1.0.0"
     DEBUG: bool = True
     
-    # File storage
     OUTPUT_DIR: str = "outputs"
     MAX_SIMULATION_DURATION_HOURS: int = 24
+
+    DATABASE_URL:str = "sqlite:///./simulations.db"
     
     class Config:
         env_file = ".env"

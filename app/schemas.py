@@ -79,3 +79,23 @@ class HealthResponse(BaseModel):
     status: str
     version: str
     timestamp: str
+
+class SimulationStatisticsBase(BaseModel):
+    max_power_W: Optional[float] = None
+    avg_power_W: Optional[float] = None
+    min_altitude_km: Optional[float] = None
+    max_altitude_km: Optional[float] = None
+    eclipse_time_seconds: Optional[float] = None
+    eclipse_percentage: Optional[float] = None
+    orbital_period_minutes: Optional[float] = None
+    total_data_points: Optional[int] = None
+
+class SimulationDetailResponse(OrbitParametersBase, PanelParametersBase, SimulationParametersBase, SimulationStatisticsBase):
+    simulation_id: str
+    created_at: str
+    status: str
+    error_message: Optional[str] = None
+    
+    # Output files
+    plot_url: Optional[str] = None
+    csv_url: Optional[str] = None

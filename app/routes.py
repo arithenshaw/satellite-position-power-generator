@@ -1,9 +1,12 @@
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Query, Depends
 from fastapi.responses import FileResponse
-from app.schemas import SimulationRequest, SimulationResponse, HealthResponse
+from app.schemas import SimulationRequest, SimulationResponse, SimulationDetailResponse
 from app.services.simulator import SimulationService
 from app.config import settings
+from app.database import get_db
 from datetime import datetime
+from app.models import Simulation
+from sqlalchemy.orm import Session
 import os
 
 router = APIRouter()
@@ -11,17 +14,6 @@ simulator_service = SimulationService()
 
 @router.post("/simulations", response_model=SimulationResponse, status_code=201)
 async def create_simulation(request: SimulationRequest):
-    """
-    Create and run a new solar panel power simulation
-    
-    propagation_method: 'circular' or 'tle'
-    altitude_km: Orbit altitude (circular method only)
-    inclination_deg: Orbit inclination (circular method only)
-    tle_line1/tle_line2: TLE data (TLE method only)
-    panel_area_m2: Solar panel area
-    panel_efficiency: Panel efficiency (0.29 = 29%)
-    duration_hours: How long to simulate
-    """
     result = simulator_service.run_simulation(request)
     
     if result.status == "error":
@@ -87,3 +79,37 @@ async def get_examples():
             "time_step_seconds": 60
         }
     }
+
+@router.get("/simulations/{simulation_id}", response_model=SimulationDetailResponse)
+async def get_simulation_by_id(simulation_id: str, db: Session = Depends(get_db)):
+    simulation = db.query(Simulation).filter(Simulation.simulation_id == simulation_id).first()
+    
+    if not simulation:
+        raise HTTPException(status_code=404, detail=f"Simulation with ID '{simulation_id}' not found")
+    
+    return SimulationDetailResponse(
+        simulation_id=simulation.simulation_id,
+        created_at=simulation.created_at.isoformat(),
+        status=simulation.status,
+        error_message=simulation.error_message,
+        propagation_method=simulation.propagation_method,
+        altitude_km=simulation.altitude_km,
+        inclination_deg=simulation.inclination_deg,
+        tle_line1=simulation.tle_line1,
+        tle_line2=simulation.tle_line2,
+        panel_area_m2=simulation.panel_area_m2,
+        panel_efficiency=simulation.panel_efficiency,
+        start_time=simulation.start_time,
+        duration_hours=simulation.duration_hours,
+        time_step_seconds=simulation.time_step_seconds,
+        max_power_W=simulation.max_power_W,
+        avg_power_W=simulation.avg_power_W,
+        min_altitude_km=simulation.min_altitude_km,
+        max_altitude_km=simulation.max_altitude_km,
+        eclipse_time_seconds=simulation.eclipse_time_seconds,
+        eclipse_percentage=simulation.eclipse_percentage,
+        orbital_period_minutes=simulation.orbital_period_minutes,
+        total_data_points=simulation.total_data_points,
+        plot_url=simulation.plot_url,
+        csv_url=simulation.csv_url
+    )
