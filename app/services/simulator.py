@@ -162,7 +162,7 @@ class SimulationService:
         df.to_csv(filepath, index=False)
         return f"/outputs/{filename}"
 
-    def _save_to_database(
+    def save_to_database(
         self,
         sim_id: str,
         request: SimulationRequest,
